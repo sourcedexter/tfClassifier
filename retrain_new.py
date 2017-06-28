@@ -77,6 +77,9 @@ import tarfile
 import numpy as np
 from six.moves import urllib
 import tensorflow as tf
+import logging
+
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 
 from tensorflow.python.framework import graph_util
 from tensorflow.python.framework import tensor_shape
@@ -84,7 +87,21 @@ from tensorflow.python.platform import gfile
 from tensorflow.python.util import compat
 
 FLAGS = None
-current_dir_path = os.path.dirname(os.path.realpath(__file__))
+
+# Input and output file flags.
+
+# Details of the training configuration.
+
+# File-system cache locations.
+
+# Controls the distortions used during training.
+
+# These are all parameters that are tied to the particular model architecture
+# we're using for Inception v3. These include things like tensor names and their
+# sizes. If you want to adapt this script to work with another model, you will
+# need to update these to reflect the values in the network you're using.
+# pylint: disable=line-too-long
+DATA_URL = 'http://download.tensorflow.org/models/image/imagenet/inception-2015-12-05.tgz'
 # pylint: enable=line-too-long
 BOTTLENECK_TENSOR_NAME = 'pool_3/_reshape:0'
 BOTTLENECK_TENSOR_SIZE = 2048
@@ -269,6 +286,37 @@ def run_bottleneck_on_image(sess, image_data, image_data_tensor,
       {image_data_tensor: image_data})
   bottleneck_values = np.squeeze(bottleneck_values)
   return bottleneck_values
+
+
+def maybe_download_and_extract():
+  """Download and extract model tar file.
+
+  If the pretrained model we're using doesn't already exist, this function
+  downloads it from the TensorFlow.org website and unpacks it into a directory.
+  """
+  dest_directory = FLAGS.model_dir
+  print (dest_directory)
+  if not os.path.exists(dest_directory):
+    os.makedirs(dest_directory)
+  filename = DATA_URL.split('/')[-1]
+  filepath = os.path.join(dest_directory, filename)
+  print ("filepath is:" + filepath)
+  if not os.path.exists(filepath):
+    print ("file not found" + filepath)
+    def _progress(count, block_size, total_size):
+      sys.stdout.write('\r>> Downloading %s %.1f%%' %
+                       (filename,
+                        float(count * block_size) / float(total_size) * 100.0))
+      sys.stdout.flush()
+
+    filepath, _ = urllib.request.urlretrieve(DATA_URL,
+                                             filepath,
+                                             _progress)
+    print()
+    statinfo = os.stat(filepath)
+    print('Successfully downloaded', filename, statinfo.st_size, 'bytes.')
+  tarfile.open(filepath, 'r:gz').extractall(dest_directory)
+
 
 def ensure_dir_exists(dir_name):
   """Makes sure the folder exists on disk.
@@ -578,14 +626,14 @@ def add_input_distortions(flip_left_right, random_crop, random_scale,
   resize_scale_value = tf.random_uniform(tensor_shape.scalar(),
                                          minval=1.0,
                                          maxval=resize_scale)
-  scale_value = tf.mul(margin_scale_value, resize_scale_value)
-  precrop_width = tf.mul(scale_value, MODEL_INPUT_WIDTH)
-  precrop_height = tf.mul(scale_value, MODEL_INPUT_HEIGHT)
+  scale_value = tf.multiply(margin_scale_value, resize_scale_value)
+  precrop_width = tf.multiply(scale_value, MODEL_INPUT_WIDTH)
+  precrop_height = tf.multiply(scale_value, MODEL_INPUT_HEIGHT)
   precrop_shape = tf.stack([precrop_height, precrop_width])
   precrop_shape_as_int = tf.cast(precrop_shape, dtype=tf.int32)
   precropped_image = tf.image.resize_bilinear(decoded_image_4d,
                                               precrop_shape_as_int)
-  precropped_image_3d = tf.squeeze(precropped_image, squeeze_dims=[0])
+  precropped_image_3d = tf.squeeze(precropped_image, axis=[0])
   cropped_image = tf.random_crop(precropped_image_3d,
                                  [MODEL_INPUT_HEIGHT, MODEL_INPUT_WIDTH,
                                   MODEL_INPUT_DEPTH])
@@ -598,7 +646,7 @@ def add_input_distortions(flip_left_right, random_crop, random_scale,
   brightness_value = tf.random_uniform(tensor_shape.scalar(),
                                        minval=brightness_min,
                                        maxval=brightness_max)
-  brightened_image = tf.mul(flipped_image, brightness_value)
+  brightened_image = tf.multiply(flipped_image, brightness_value)
   distort_result = tf.expand_dims(brightened_image, 0, name='DistortResult')
   return jpeg_data, distort_result
 
@@ -704,6 +752,8 @@ def main(_):
     tf.gfile.DeleteRecursively(FLAGS.summaries_dir)
   tf.gfile.MakeDirs(FLAGS.summaries_dir)
 
+  # Set up the pre-trained graph.
+  maybe_download_and_extract()
   graph, bottleneck_tensor, jpeg_data_tensor, resized_image_tensor = (
       create_inception_graph())
 
@@ -747,9 +797,9 @@ def main(_):
 
   # Merge all the summaries and write them out to /tmp/retrain_logs (by default)
   merged = tf.summary.merge_all()
-  train_writer = tf.train.SummaryWriter(FLAGS.summaries_dir + '/train',
+  train_writer = tf.summary.FileWriter(FLAGS.summaries_dir + '/train',
                                         sess.graph)
-  validation_writer = tf.train.SummaryWriter(FLAGS.summaries_dir + '/validation')
+  validation_writer = tf.summary.FileWriter(FLAGS.summaries_dir + '/validation')
 
   # Set up all our weights to their initial default values.
   init = tf.global_variables_initializer()
@@ -799,7 +849,8 @@ def main(_):
           feed_dict={bottleneck_input: validation_bottlenecks,
                      ground_truth_input: validation_ground_truth})
       validation_writer.add_summary(validation_summary, i)
-      print('%s: Step %d: Validation accuracy = %.1f%%' %
+
+      logging.debug('%s: Step %d: Validation accuracy = %.1f%%' %
             (datetime.now(), i, validation_accuracy * 100))
 
   # We've completed all our training, so run a final test evaluation on
@@ -828,7 +879,7 @@ if __name__ == '__main__':
   parser.add_argument(
       '--image_dir',
       type=str,
-      default='',
+      default='./images',
       help='Path to folders of labeled images.'
   )
   parser.add_argument(
@@ -964,5 +1015,5 @@ if __name__ == '__main__':
       """
   )
   FLAGS, unparsed = parser.parse_known_args()
-  tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
 
+  tf.app.run(main=main, argv=[sys.argv[0]] + unparsed)
