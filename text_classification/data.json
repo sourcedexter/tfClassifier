@@ -1,0 +1,7 @@
+{
+	"time": ["what time is it?", "how long has it been since we started?", "that's a long time ago", " I spoke to you last week", " I saw you yesterday"],
+	"sorry": ["I'm extremely sorry", "did he apologize to you?", "I shouldn't have been rude"],
+	"greeting": ["Hello there!", "Hey man! How are you?", "hi"],
+	"farewell": ["It was a pleasure meeting you", "Good Bye.", "see you soon", "I gotta go now."],
+	"age": ["what's your age?", "How old are you?", "I'm a couple of years older than her", "You look aged!"]
+}
