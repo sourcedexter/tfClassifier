@@ -193,7 +193,7 @@ if __name__ == '__main__':
       default='',
       help='Absolute path to image file.'
   )
-  parser.add_argument(
+  parser.add_argument( 
       '--num_top_predictions',
       type=int,
       default=1,
