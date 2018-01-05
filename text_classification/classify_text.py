@@ -10,8 +10,8 @@ import unicodedata
 import sys
 
 # a table structure to hold the different punctuation used
-tbl = dict.fromkeys(i for i in xrange(sys.maxunicode)
-                    if unicodedata.category(unichr(i)).startswith('P'))
+tbl = dict.fromkeys(i for i in range(sys.maxunicode)
+                    if unicodedata.category(chr(i)).startswith('P'))
 
 
 # method to remove punctuations from sentences.
@@ -38,10 +38,10 @@ for each_category in data.keys():
     for each_sentence in data[each_category]:
         # remove any punctuation from the sentence
         each_sentence = remove_punctuation(each_sentence)
-        print each_sentence
+        print(each_sentence)
         # extract words from each sentence and append to the word list
         w = nltk.word_tokenize(each_sentence)
-        print "tokenized words: ", w
+        print("tokenized words: ", w)
         words.extend(w)
         docs.append((w, each_category))
 
